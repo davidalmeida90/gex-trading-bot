@@ -1,0 +1,4 @@
+ib_async>=2.0
+rich>=13
+pandas>=2.0
+numpy>=1.24
