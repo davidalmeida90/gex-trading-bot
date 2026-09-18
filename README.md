@@ -5,7 +5,7 @@ An automated gamma exposure (GEX) strategy in Python. Once a day it reads dealer
 A terminal desk prints every input and the reasoning behind the trade as it happens: the regime, the rule, the account, the decision, the fills and the result.
 
 > [!WARNING]
-> **A trading idea to study, not a proven strategy.** This engine has only run on an Interactive Brokers paper account, where fills are simulated. It has never traded real money. Its only evidence is a backtest on two years of SPY data with a small edge (about 3 basis points a day, gone at 3 basis points of costs) and just 26 short gamma sessions, which is too few to trust. Live trading would face slippage, outages and regime changes the test never saw. Research and education only, not investment advice. Futures can lose more than the money in the account.
+> **A trading idea to study, not a proven strategy.** Everything here is built on free data: the SqueezeMetrics daily gamma series, Cboe delayed quotes and about two years of hourly SPY bars from Yahoo. With that data the methodology only got a short backtest, with a small edge (about 3 basis points a day, gone at 3 basis points of costs) and just 26 short gamma sessions, too few to prove anything. It has only run on an Interactive Brokers paper account, where fills are simulated, and has never traded real money. Treat it as a starting point that can be taken much further with paid data (OptionMetrics, Cboe Open-Close volume by participant type, long intraday histories) and deeper studies and backtests. Research and education only, not investment advice. Futures can lose more than the money in the account.
 
 ## Watch it run
 
@@ -113,6 +113,17 @@ These tests were run while designing the rule. They are not part of this reposit
 - Gross edge is about 3 basis points a day, and it disappears at 3 basis points of costs.
 - Only 26 of the 723 sessions opened in short gamma.
 - Worst days were long gamma fades on event days, when the book flipped during the session.
+
+## How it could be improved
+
+This is a first version on free data. With more data and more testing it could go much further:
+
+- **Measure the dealer side instead of assuming it.** Cboe Open-Close data splits volume by customer, firm and market maker, and by opening or closing trades. That removes the dealer sign guess behind every public GEX number (paid).
+- **A longer backtest.** Test from 2011, when the SqueezeMetrics series starts, on 1 minute data instead of two years of hourly bars. That turns 26 short gamma sessions into several hundred and shows whether the edge survived the rise of zero day options after 2022.
+- **Test each leg on its own.** The research supports following the day in short gamma much more strongly than fading it in long gamma, yet most trades here are fades. Log both legs separately, or run `--no-fade` until the fade leg has its own evidence.
+- **Build the regime in house.** Recompute net gamma from OptionMetrics or a full options history, so the input no longer depends on one outside source that can change or stop.
+- **Intraday gamma.** Same day options open and close inside the session and never reach open interest. Intraday volume by participant would capture that book.
+- **Execution closer to the test.** Exit at the closing auction and model real slippage and costs, then paper trade for months, comparing live fills with the backtest before any real money.
 
 ## Files
 
