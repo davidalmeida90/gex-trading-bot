@@ -4,6 +4,9 @@ An automated gamma exposure (GEX) strategy in Python. Once a day it reads dealer
 
 A terminal desk prints every input and the reasoning behind the trade as it happens: the regime, the rule, the account, the decision, the fills and the result.
 
+> [!WARNING]
+> **A trading idea to study, not a proven strategy.** This engine has only run on an Interactive Brokers paper account, where fills are simulated. It has never traded real money. Its only evidence is a backtest on two years of SPY data with a small edge (about 3 basis points a day, gone at 3 basis points of costs) and just 26 short gamma sessions, which is too few to trust. Live trading would face slippage, outages and regime changes the test never saw. Research and education only, not investment advice. Futures can lose more than the money in the account.
+
 ## Watch it run
 
 [![GEX trading bot on the Interactive Brokers API, a full paper session](docs/video.jpg)](https://www.youtube.com/watch?v=mA8H1k5O9vc)
