@@ -4,6 +4,51 @@ An automated gamma exposure (GEX) strategy in Python. Once a day it reads dealer
 
 A terminal desk prints every input and the reasoning behind the trade as it happens: the regime, the rule, the account, the decision, the fills and the result.
 
+## Watch it run
+
+[![GEX trading bot on the Interactive Brokers API, a full paper session](docs/video.jpg)](https://www.youtube.com/watch?v=mA8H1k5O9vc)
+
+**[Gamma Exposure (GEX) Trading Bot in Python with the IBKR API](https://www.youtube.com/watch?v=mA8H1k5O9vc)** (9 min, subtitles in English, Portuguese and Spanish). It explains GEX on a live dashboard, then runs this engine on a paper account: regime, decision, order, fill and result.
+
+| | |
+|---|---|
+| Step by step GEX in Python, with formulas and charts | [davidariasfinance.com/scripts/gamma-exposure-gex](https://davidariasfinance.com/scripts/gamma-exposure-gex/) |
+| Live GEX dashboard (tape, depth by strike, gamma flip, walls) | [davidariasfinance.com/gexdashboard](https://davidariasfinance.com/gexdashboard/) |
+
+[![SPX Gamma Desk dashboard](docs/dashboard.jpg)](https://davidariasfinance.com/gexdashboard/)
+
+## How the mechanism works
+
+**1. Dealers hedge options, and gamma sets how much.** Market makers who trade SPX options stay delta neutral by trading the index or its futures. Delta changes as the index moves, at a rate given by gamma, so every move forces them to rebalance. Gamma exposure adds that up across the whole chain:
+
+```
+GEX = gamma x open interest x 100 x spot^2 x 1%      (calls +, puts -)
+```
+
+It reads as the dollars of S&P 500 dealers must buy or sell for each 1% move in the index.
+
+**2. Its sign decides the direction of the hedge.**
+
+| Dealers are | Index rises | Index falls | Effect on the market |
+|---|---|---|---|
+| Long gamma (GEX above zero) | their delta rises, so they sell | their delta falls, so they buy | damps moves, late moves tend to fade |
+| Short gamma (GEX below zero) | their delta falls, so they buy | their delta rises, so they sell | pushes moves further, late moves tend to continue |
+
+**3. Hedging bunches up near the close.** Dealers rebalance before the market shuts, and the bigger the move so far, the bigger the rebalance. Baltussen, Da, Lammers and Martens (2021) find the last half hour of the S&P 500 continues the day only on short gamma days, which is the flow above showing up in prices.
+
+**4. So the bot takes the dealers' side of that flow.** At 15:30 New York it asks two questions: were dealers short or long gamma at the last close, and is the market up or down since 09:30? Short gamma means follow the day, long gamma means fade it. It holds for the last half hour and is flat before the closing auction.
+
+### What happens in one session
+
+1. **Connect** to TWS or IB Gateway, refusing anything that is not a paper port. Account number is masked on screen.
+2. **Pick the contract**: the nearest MES expiry with more than seven days left.
+3. **Read the regime** (`regime.py`): the SqueezeMetrics net gamma of the last close before today. Its sign is the regime. A cross-check recomputes GEX from the live Cboe chain and prints it next to it, for the record only.
+4. **Wait for 15:30 New York**, then read today's MES bars and the return since the 09:30 open.
+5. **Decide** (`last_hour.py`): the table below, sized to notional equal to equity.
+6. **Send a market order** and read the fill and commission back from the execution log.
+7. **Hold**, marking the open P&L every 10 seconds.
+8. **Flatten at 15:59:30** with a market order and append one line to `out/trades.csv`.
+
 ## The rule
 
 At 15:30 New York time, compare MES with the 09:30 open.
@@ -15,16 +60,15 @@ At 15:30 New York time, compare MES with the 09:30 open.
 
 A flat day means no trade. Every position is closed at 15:59:30.
 
-Size is notional equal to equity: net liquidation divided by 5 times the MES price, rounded down. On a $1m paper account that is about 26 contracts.
+Size is notional equal to equity: net liquidation divided by 5 times the MES price ($5 a point), rounded down. On a $1m paper account that is about 26 contracts.
 
-**Why it works this way.** Option dealers hedge their gamma. When they are short gamma they have to trade with the move, so late moves tend to continue into the close. When they are long gamma they trade against it, so late moves tend to fade.
 
 ## Where the idea comes from
 
-1. Baltussen, Da, Lammers and Martens, *Hedging demand and market intraday momentum*, Journal of Financial Economics, 2021 ([author PDF](https://academicweb.nd.edu/~zda/intramom.pdf)). The last half hour continues the day, and on the S&P 500 only when dealers are short gamma.
+1. Baltussen, Da, Lammers and Martens, *Hedging demand and market intraday momentum*, Journal of Financial Economics, 2021 ([author PDF](https://academicweb.nd.edu/~zda/intramom.pdf)). On the S&P 500, the last half hour continues the day only when dealers are short gamma.
 2. Barbon and Buraschi, *Gamma Fragility*, 2021. Positive dealer gamma goes with intraday reversal.
 
-The regime uses the same series as that research: the SqueezeMetrics daily SPX net gamma, free at `https://squeezemetrics.com/monitor/static/DIX.csv`. It is downloaded at run time and not redistributed here.
+Regime data comes from the same series as that research: the SqueezeMetrics daily SPX net gamma, free at `https://squeezemetrics.com/monitor/static/DIX.csv`. It is downloaded at run time and not redistributed here.
 
 ## Backtest context
 
@@ -39,7 +83,7 @@ These tests were run while designing the rule. They are not part of this reposit
 **Read it with care:**
 - Gross edge is about 3 basis points a day, and it disappears at 3 basis points of costs.
 - Only 26 of the 723 sessions opened in short gamma.
-- The worst days were long gamma fades on event days, when the book flipped during the session.
+- Worst days were long gamma fades on event days, when the book flipped during the session.
 
 ## Files
 
@@ -51,6 +95,7 @@ These tests were run while designing the rule. They are not part of this reposit
 | `gex.py` | full SPX chain from Cboe delayed quotes and its gamma exposure, used for the cross-check |
 | `flatten_paper.py` | closes every position on the paper account so a session starts flat |
 | `test_engine_offline.py` | runs a whole session against a fake broker, no TWS needed |
+| `docs/` | images used in this README |
 
 ## Setup
 
@@ -76,7 +121,7 @@ Every session appends one line to `out/trades.csv`: regime, leg, action, contrac
 
 - Without `--paper` it only computes and prints.
 - It refuses any port that is not a paper port.
-- It stands down on early close days and when the regime file is more than four days old.
+- It stands down on early close days, when the regime file is more than four days old, and after 15:55 New York.
 - It refuses to trade on top of an existing MES position unless started with `--flatten-first`.
 - Contract: the nearest MES expiry with more than seven days left, so it rolls a week before expiry.
 - Fills and commissions are read back from the execution log. On a paper account IB simulates the fills; commissions follow IB's real schedule.
