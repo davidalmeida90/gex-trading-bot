@@ -38,6 +38,32 @@ It reads as the dollars of S&P 500 dealers must buy or sell for each 1% move in 
 
 **4. So the bot takes the dealers' side of that flow.** At 15:30 New York it asks two questions: were dealers short or long gamma at the last close, and is the market up or down since 09:30? Short gamma means follow the day, long gamma means fade it. It holds for the last half hour and is flat before the closing auction.
 
+### Dealer sign: why the engine does not use gamma x open interest
+
+Inferring dealer gamma from gamma x open interest is debatable, and the weak point is the dealer sign. Open interest counts open contracts, not who holds which side. Every contract has a buyer and a seller, and the formula guesses that dealers sit opposite customers, who by convention sell calls (covered calls, collars) and buy puts (protection):
+
+```
+GEX_i = dealer_sign_i x gamma_i x OI_i x 100 x spot^2 x 1%      dealer_sign = +1 call, -1 put
+```
+
+When customers buy calls instead (speculative rallies, zero day options) or sell puts for income, dealers hold the opposite side and that contract's true sign flips. Open interest cannot show it, and it misses same day trades because it only updates overnight.
+
+That estimate is used on the [dashboard](https://davidariasfinance.com/gexdashboard/) and the [step by step page](https://davidariasfinance.com/scripts/gamma-exposure-gex/) to explain the mechanics, because it is simple and visible strike by strike. **This engine does not trade on it.** It never computes GEX from the chain. It reads one published number a day, the SqueezeMetrics SPX net gamma at the previous close, and keeps only its sign:
+
+```
+regime_t    = sign( SqueezeMetrics GEX at the close of day t-1 )
+r_t         = MES at 15:30 / MES at 09:30 - 1
+position_t  = +sign(r_t) if short gamma (follow)     -sign(r_t) if long gamma (fade)
+contracts   = floor( equity / (5 x MES price) )
+```
+
+To be clear, SqueezeMetrics' own [white paper](https://squeezemetrics.com/monitor/download/pdf/white_paper.pdf) starts from the same dealer assumptions, so the engine does not escape the debate. Three things change:
+- **One public series, fixed before the session opens**, so there is no look ahead.
+- **Only the sign**, never levels like the gamma flip or the walls, which is where a wrong sign on a few big strikes does the most damage.
+- **Tested on that same series**, so whatever error the assumption carries is already inside the backtest result below instead of hidden from it.
+
+`regime.py` still computes our own Cboe number and prints it next to the regime, as a cross-check only. On the day of the video the two disagreed in sign.
+
 ### What happens in one session
 
 1. **Connect** to TWS or IB Gateway, refusing anything that is not a paper port. Account number is masked on screen.
